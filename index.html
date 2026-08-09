@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MR.WOK">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="preload" as="image" href="slides/1.webp" fetchpriority="high">
+<title>Mr. Wok — Carta 3.3</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+body{touch-action:none;font-family:Arial,sans-serif}
+#viewer{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center}
+#viewer{perspective:1800px;overflow:hidden}
+#pageUnder{position:absolute;width:min(100vw,177.7777778vh);height:min(56.25vw,100vh);aspect-ratio:16/9;overflow:hidden;background:#000;transform-origin:center;backface-visibility:hidden;z-index:1}
+#stage{position:relative;z-index:2;transform-origin:0 0;will-change:transform;width:min(100vw,177.7777778vh);height:min(56.25vw,100vh);aspect-ratio:16/9;overflow:hidden;background:#000}
+#pageUnder img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
+#slide{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.hotspot{position:absolute;z-index:10;display:flex;align-items:center;justify-content:center;border:0;padding:0;margin:0;background:transparent;cursor:pointer;outline:none;overflow:hidden;isolation:isolate;transition:transform .12s ease,filter .12s ease}
+.hotspot img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none;transition:transform .16s ease,filter .16s ease;transform-origin:center}
+.hotspot.circle{border-radius:50%}
+.hotspot.circle img{object-fit:cover}
+.hotspot.page2 img{object-fit:contain;padding:0.5%}
+.hotspot.lens::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:radial-gradient(circle at 28% 18%,rgba(255,255,255,.18),transparent 30%);border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 2px 3px rgba(255,255,255,.12),inset 0 -5px 9px rgba(0,0,0,.20)}
+.hotspot:hover img{transform:scale(1.10)}
+.hotspot:active{transform:translateY(2px) scale(.985);filter:brightness(.96)}
+.hotspot:active img,.hotspot.is-touching img{transform:scale(1.15)}
+.hotspot.arrow img{object-fit:contain}
+.hotspot.volver{background:#000;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.08)}
+.hotspot.volver img{object-fit:contain;padding:4%}
+#fullscreen{position:fixed;right:10px;top:max(10px,env(safe-area-inset-top));z-index:9999;width:44px;height:44px;border:0;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+#home{position:fixed;left:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;border:0;border-radius:22px;padding:9px 15px;background:rgba(0,0,0,.55);color:#fff;font-size:13px}
+#loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:#000;color:#fff}
+#rotateOverlay{position:fixed;inset:0;z-index:90;background:#000;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;padding:24px}
+/* V5.8 — fallback visual para Safari iPhone, donde el fullscreen DOM puede no estar disponible. */
+html.ios-fullscreen-fallback,html.ios-fullscreen-fallback body{width:100vw;height:100dvh;overflow:hidden;background:#000}
+html.ios-fullscreen-fallback #viewer{position:fixed;inset:0;width:100vw;height:100dvh;z-index:999999;background:#000}
+html.ios-fullscreen-fallback #stage{max-width:none;max-height:none}
+
+#rotateOverlay .rotateBox{max-width:420px}
+#rotateOverlay .icons{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:18px;font-size:54px;line-height:1}.rotateFs{font-size:46px;font-weight:700}.rotatePlus{font-size:34px;opacity:.7}
+#rotateOverlay h1{margin:0 0 10px;font-size:30px}
+#rotateOverlay p{margin:0 0 22px;font-size:16px;opacity:.85}
+#enterFullscreen{border:0;border-radius:12px;padding:14px 22px;background:#fff;color:#000;font-weight:700;font-size:15px;cursor:pointer}
+@keyframes turnPhone{0%,100%{transform:rotate(0deg)}50%{transform:rotate(90deg)}}
+@media (orientation:portrait){#rotateOverlay{display:flex}}
+@media (prefers-reduced-motion:reduce){.hotspot,.hotspot img{transition:none!important}}
+
+/* V5.3 — pasar página realista: la hoja se levanta desde abajo */
+#pageUnder{opacity:0;transition:opacity .08s linear;}
+#pageUnder.visible{opacity:1;}
+#stage.page-next{animation:realPageUp 1.10s cubic-bezier(.25,.72,.32,1) both;transform-origin:center bottom;backface-visibility:hidden;}
+#stage.page-prev{animation:realPageDown 1.10s cubic-bezier(.25,.72,.32,1) both;transform-origin:center top;backface-visibility:hidden;}
+#stage.page-next::after,#stage.page-prev::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:100;background:linear-gradient(to top,rgba(0,0,0,.16),rgba(0,0,0,0) 48%,rgba(255,255,255,.035) 78%,rgba(0,0,0,.06));opacity:0;animation:pageShade 1.10s cubic-bezier(.25,.72,.32,1) both;}
+/* Una sola hoja: un único movimiento continuo, sin fase intermedia. */
+@keyframes realPageUp{0%{transform:perspective(2200px) rotateX(0deg) translate3d(0,0,0) scale(1);filter:brightness(1)}100%{transform:perspective(2200px) rotateX(88deg) translate3d(0,-7%,0) scale(.99);filter:brightness(.92)}}
+@keyframes realPageDown{0%{transform:perspective(2200px) rotateX(0deg) translate3d(0,0,0) scale(1);filter:brightness(1)}100%{transform:perspective(2200px) rotateX(-88deg) translate3d(0,7%,0) scale(.99);filter:brightness(.92)}}
+@keyframes pageShade{0%{opacity:0}35%{opacity:.10}75%{opacity:.16}100%{opacity:.03}}
+@media (prefers-reduced-motion:reduce){#stage.page-next,#stage.page-prev{animation:none!important}#stage.page-next::after,#stage.page-prev::after{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="loading">Cargando carta…</div>
+<div id="rotateOverlay"><div class="rotateBox"><div class="icons"><span class="phone">📱↻</span><span class="rotatePlus">+</span><span class="rotateFs">⛶</span></div><h1>GIRA EL MÓVIL + ⛶</h1><p>Pon el móvil en horizontal y pulsa el botón ⛶ para entrar en pantalla completa.</p><button id="enterFullscreen" type="button" aria-label="Entrar en pantalla completa">⛶</button></div></div>
+<div id="viewer"><div id="pageUnder"><img id="underSlide" alt=""></div><div id="stage"><img id="slide" src="slides/1.webp" alt="Carta Mr. Wok" fetchpriority="high" decoding="async"></div><button id="fullscreen" type="button" aria-label="Pantalla completa">⛶</button><button id="home" type="button">Inicio</button></div>
+<script>
+const DATA={
+  "count": 14,
+  "links": {
+    "1": [
+      {
+        "x": 44.4,
+        "y": 7.2,
+        "w": 41.2,
+        "h": 41.2,
+        "shape": "circle",
+        "target": 2,
+        "name": "Ver carta",
+        "asset": "01_VER_CARTA.webp"
+      }
+    ],
+    "2": [
+      {
+        "x": 25.8,
+        "y": 35.0,
+        "w": 23.2,
+        "h": 12.8,
+        "target": 5,
+        "name": "Menús y bebidas",
+        "asset": "02_MENUS_BEBIDAS.webp"
+      },
+      {
+        "x": 50.2,
+        "y": 35.0,
+        "w": 23.0,
+        "h": 12.8,
+        "target": 8,
+        "name": "Carta",
+        "asset": "02_CARTA.webp"
+      },
+      {
+        "x": 25.8,
+        "y": 51.0,
+        "w": 23.2,
+        "h": 12.8,
+        "target": 3,
+        "name": "Normas",
+        "asset": "02_NORMAS.webp"
+      },
+      {
+        "x": 50.2,
+        "y": 51.0,
+        "w": 22.0,
+        "h": 12.8,
+        "target": 4,
+        "name": "FAQ",
+        "asset": "02_FAQ.webp"
+      },
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 1,
+        "name": "Inicio",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      }
+    ],
+    "3": [
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 2,
+        "name": "Inicio",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      }
+    ],
+    "4": [
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 2,
+        "name": "Inicio",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      }
+    ],
+    "5": [
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 2,
+        "name": "Inicio",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      },
+      {
+        "x": 80.3,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 6,
+        "name": "Siguiente",
+        "asset": "FLECHA_BOTON_DERECHA.webp",
+        "shape": "arrow-right"
+      },
+      {
+        "x": 8.2,
+        "y": 8.0,
+        "w": 7.2,
+        "h": 13.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "6": [
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 5,
+        "name": "Anterior",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      },
+      {
+        "x": 80.3,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 7,
+        "name": "Siguiente",
+        "asset": "FLECHA_BOTON_DERECHA.webp",
+        "shape": "arrow-right"
+      },
+      {
+        "x": 8.2,
+        "y": 8.0,
+        "w": 7.2,
+        "h": 13.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "7": [
+      {
+        "x": 7.0,
+        "y": 39.0,
+        "w": 12.8,
+        "h": 22.0,
+        "target": 6,
+        "name": "Anterior",
+        "asset": "FLECHA_BOTON_IZQUIERDA.webp",
+        "shape": "arrow-left"
+      },
+      {
+        "x": 8.2,
+        "y": 8.0,
+        "w": 7.2,
+        "h": 13.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "8": [
+      {
+        "x": 25.5,
+        "y": 31.0,
+        "w": 19.8,
+        "h": 34.0,
+        "target": 9,
+        "name": "Carta entresemana",
+        "asset": "08_CARTA_ENTRESEMANA.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 55.0,
+        "y": 31.0,
+        "w": 19.8,
+        "h": 34.0,
+        "target": 12,
+        "name": "Fin de semana y festivos",
+        "asset": "08_FINDE_SEMANA.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "9": [
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 10,
+        "name": "Carne y verduras",
+        "asset": "CARNE_VERDURAS.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 11,
+        "name": "Wok",
+        "asset": "WOK.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "10": [
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 9,
+        "name": "Marisco",
+        "asset": "MARISCO.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 11,
+        "name": "Wok",
+        "asset": "WOK.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "11": [
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 9,
+        "name": "Marisco",
+        "asset": "MARISCO.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 10,
+        "name": "Carne y verduras",
+        "asset": "CARNE_VERDURAS.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "12": [
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 13,
+        "name": "Carne y verduras",
+        "asset": "CARNE_VERDURAS.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 14,
+        "name": "Salsas",
+        "asset": "WOK.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "13": [
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 14,
+        "name": "Salsas",
+        "asset": "WOK.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 12,
+        "name": "Marisco",
+        "asset": "MARISCO.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ],
+    "14": [
+      {
+        "x": 4.0,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 12,
+        "name": "Marisco",
+        "asset": "MARISCO.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 85.2,
+        "y": 7.0,
+        "w": 10.8,
+        "h": 19.0,
+        "target": 13,
+        "name": "Carne y verduras",
+        "asset": "CARNE_VERDURAS.webp",
+        "shape": "circle"
+      },
+      {
+        "x": 17.7,
+        "y": 7.0,
+        "w": 7.5,
+        "h": 12.5,
+        "target": 2,
+        "name": "Inicio menú",
+        "asset": "VOLVER.webp"
+      }
+    ]
+  },
+  "external": {
+    "1": [
+      {
+        "x": 54.65,
+        "y": 86.85,
+        "w": 24.6,
+        "h": 10.4,
+        "url": "https://maps.app.goo.gl/sn9JC4gLSb1Sx7TDA",
+        "name": "Google Maps",
+        "asset": "01_MAPS.webp"
+      }
+    ]
+  }
+};
+const stage=document.getElementById('stage');
+const slide=document.getElementById('slide');
+const loading=document.getElementById('loading');
+const rotateOverlay=document.getElementById('rotateOverlay');
+function isPortrait(){
+  const vv=window.visualViewport;
+  const w=vv?vv.width:window.innerWidth;
+  const h=vv?vv.height:window.innerHeight;
+  return w < h;
+}
+function updateOrientationOverlay(){
+  rotateOverlay.style.display=isPortrait()?'flex':'none';
+}
+window.addEventListener('resize',updateOrientationOverlay);
+function isIOS(){
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function isStandalone(){
+  return window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+}
+function enableIOSFallback(){
+  document.documentElement.classList.add('ios-fullscreen-fallback');
+  document.body.classList.add('ios-fullscreen-fallback');
+  updateFullscreenButton();
+  return true;
+}
+function disableIOSFallback(){
+  document.documentElement.classList.remove('ios-fullscreen-fallback');
+  document.body.classList.remove('ios-fullscreen-fallback');
+  updateFullscreenButton();
+}
+async function requestFullscreen(){
+  const fs = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+  if(fs || document.documentElement.classList.contains('ios-fullscreen-fallback')) return true;
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) {
+      await el.requestFullscreen({navigationUI:'hide'});
+      if(document.fullscreenElement) return true;
+    }
+    if (el.webkitRequestFullscreen) {
+      const result=el.webkitRequestFullscreen();
+      if(result && typeof result.then==='function') await result;
+      if(document.webkitFullscreenElement) return true;
+    }
+    if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+      if(document.msFullscreenElement) return true;
+    }
+  } catch(err) {
+    console.warn('Fullscreen rechazado:', err);
+  }
+  // En iPhone Safari el fullscreen de un elemento HTML puede no estar disponible.
+  // Activamos un modo visual equivalente sin crear una segunda carta.
+  if(isIOS()) return enableIOSFallback();
+  return false;
+}
+function updateOrientationOverlay(){
+  rotateOverlay.style.display=isPortrait()?'flex':'none';
+}
+function onRotate(){
+  updateOrientationOverlay();
+  updateFullscreenButton();
+}
+window.addEventListener('resize',()=>setTimeout(onRotate,100));
+window.addEventListener('orientationchange',()=>setTimeout(onRotate,150));
+if(window.visualViewport) window.visualViewport.addEventListener('resize',()=>setTimeout(onRotate,100));
+const enterFullscreenBtn=document.getElementById('enterFullscreen');
+let fullscreenTapLock=false;
+async function enterFullscreenFromOverlay(e){
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  if(fullscreenTapLock) return;
+  fullscreenTapLock=true;
+  const ok=await requestFullscreen();
+  if(ok){
+    rotateOverlay.style.display='none';
+    try {
+      if(screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock('landscape');
+      }
+    } catch(_) {}
+    updateFullscreenButton();
+  }
+  setTimeout(()=>fullscreenTapLock=false,500);
+}
+enterFullscreenBtn.addEventListener('click',enterFullscreenFromOverlay);
+enterFullscreenBtn.addEventListener('touchend',enterFullscreenFromOverlay,{passive:false});
+
+// Zoom táctil REAL independiente del navegador: Pointer Events + dos dedos.
+const zoomState={scale:1,min:1,max:4,tx:0,ty:0};
+const pointers=new Map();
+let pinch=null;
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function applyZoom(){
+  stage.style.transform=`translate3d(${zoomState.tx}px,${zoomState.ty}px,0) scale(${zoomState.scale})`;
+}
+function resetZoom(){zoomState.scale=1;zoomState.tx=0;zoomState.ty=0;pinch=null;applyZoom();}
+function pDistance(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+function pMid(a,b){return {x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
+function startPinch(){
+  if(pointers.size!==2)return;
+  const [a,b]=[...pointers.values()];
+  const m=pMid(a,b);
+  pinch={distance:pDistance(a,b),scale:zoomState.scale,mid:m,tx:zoomState.tx,ty:zoomState.ty};
+}
+function movePinch(){
+  if(!pinch || pointers.size!==2)return;
+  const [a,b]=[...pointers.values()];
+  const d=pDistance(a,b),m=pMid(a,b);
+  const next=clamp(pinch.scale*(d/pinch.distance),zoomState.min,zoomState.max);
+  const ratio=next/pinch.scale;
+  zoomState.scale=next;
+  zoomState.tx=m.x-(pinch.mid.x-pinch.tx)*ratio;
+  zoomState.ty=m.y-(pinch.mid.y-pinch.ty)*ratio;
+  applyZoom();
+}
+function pointerDown(e){
+  if(e.pointerType!=='touch')return;
+  pointers.set(e.pointerId,{clientX:e.clientX,clientY:e.clientY});
+  try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
+  if(pointers.size===2){e.preventDefault();startPinch();}
+}
+function pointerMove(e){
+  if(e.pointerType!=='touch' || !pointers.has(e.pointerId))return;
+  pointers.set(e.pointerId,{clientX:e.clientX,clientY:e.clientY});
+  if(pointers.size===2){e.preventDefault();movePinch();}
+}
+function pointerEnd(e){
+  if(e.pointerType!=='touch')return;
+  pointers.delete(e.pointerId);
+  if(pointers.size<2)pinch=null;
+  if(pointers.size===0 && zoomState.scale<=1.01)resetZoom();
+}
+viewer.addEventListener('pointerdown',pointerDown,{passive:false});
+viewer.addEventListener('pointermove',pointerMove,{passive:false});
+viewer.addEventListener('pointerup',pointerEnd,{passive:false});
+viewer.addEventListener('pointercancel',pointerEnd,{passive:false});
+viewer.addEventListener('pointerleave',pointerEnd,{passive:false});
+window.addEventListener('resize',()=>{if(zoomState.scale===1)resetZoom();});
+
+let currentSlide=1;
+function readSlide(){const v=Number.parseInt(location.hash.slice(1),10);return Number.isInteger(v)&&v>=1&&v<=DATA.count?v:1;}
+function goTo(n){
+ const target=Math.max(1,Math.min(DATA.count,n));
+ if(target===currentSlide)return;
+ // V5.7: todos los botones usan la misma transición, siempre hacia arriba.
+ const direction='next';
+ resetZoom();
+ underSlide.src='slides/'+target+'.webp';
+ pageUnder.classList.add('visible');
+ stage.classList.remove('page-next','page-prev');
+ void stage.offsetWidth;
+ stage.classList.add(direction==='next'?'page-next':'page-prev');
+ history.replaceState(null,'','#'+target);
+ window.clearTimeout(stage._pageTimer);
+ stage._pageTimer=window.setTimeout(()=>{
+   currentSlide=target;
+   draw();
+   stage.classList.remove('page-next','page-prev');
+   pageUnder.classList.remove('visible');
+ },1100);
+}
+function addButton(link,external=false){
+ const b=document.createElement('button'); b.type='button'; b.className='hotspot';
+ const shape=link.shape||'';
+ if(shape==='circle') b.classList.add('circle');
+ if(shape==='arrow-left'||shape==='arrow-right') b.classList.add('arrow');
+ if(link.asset==='VOLVER.webp') b.classList.add('volver');
+ if(currentSlide===2 && ['Menús y bebidas','Carta','Normas','FAQ'].includes(link.name)) b.classList.add('page2');
+ if(shape!=='arrow-left'&&shape!=='arrow-right') b.classList.add('lens');
+ b.setAttribute('aria-label',link.name||'Botón');
+ b.style.left=link.x+'%'; b.style.top=link.y+'%';
+ if(shape==='arrow-left'||shape==='arrow-right'){
+   b.style.left=shape==='arrow-left'?'8.95%':'82.9%'; b.style.top='40.45%'; b.style.width='7.2%'; b.style.height='auto'; b.style.aspectRatio='1/1';
+ } else if(currentSlide===2 && ['Menús y bebidas','Carta','Normas','FAQ'].includes(link.name)){
+   b.style.width='23.2%'; b.style.height='13.5%';
+ } else if(external && link.asset==='01_MAPS.webp'){
+   // MAPS: mantener la proporción real de la imagen y alinear su centro con la dirección.
+   b.style.width='24.6%'; b.style.height='auto'; b.style.aspectRatio='483/122'; b.style.top='87.1%';
+ } else if(shape==='circle'){
+   b.style.width=link.w+'%'; b.style.height='auto'; b.style.aspectRatio='1/1';
+ } else {b.style.width=link.w+'%'; b.style.height=link.h+'%';}
+ const img=document.createElement('img'); img.src='buttons/'+link.asset; img.alt=''; img.draggable=false; b.appendChild(img);
+ b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation(); if(external) location.href=link.url; else goTo(link.target);});
+ stage.appendChild(b);
+}
+function draw(){
+ currentSlide=readSlide();
+ document.querySelectorAll('.hotspot').forEach(e=>e.remove());
+ slide.src='slides/'+currentSlide+'.webp';
+ (DATA.links[String(currentSlide)]||[]).forEach(l=>addButton(l,false));
+ (DATA.external[String(currentSlide)]||[]).forEach(l=>addButton(l,true));
+}
+slide.addEventListener('load',()=>{
+  loading.style.display='none';
+  const next=currentSlide<DATA.count?currentSlide+1:1;
+  const im=new Image(); im.src='slides/'+next+'.webp';
+});
+window.addEventListener('hashchange',draw);
+document.getElementById('home').addEventListener('click',()=>goTo(1));
+const fullscreenBtn=document.getElementById('fullscreen');
+async function toggleFullscreen(){
+  const isFS=!!(document.fullscreenElement||document.webkitFullscreenElement) || document.documentElement.classList.contains('ios-fullscreen-fallback');
+  try{
+    if(isFS){
+      if(document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      else if(document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+      disableIOSFallback();
+    }else{
+      await requestFullscreen();
+    }
+  }catch(e){ console.warn('Fullscreen no disponible en este navegador',e); }
+  updateFullscreenButton();
+}
+function updateFullscreenButton(){
+  const isFS=!!(document.fullscreenElement||document.webkitFullscreenElement) || document.documentElement.classList.contains('ios-fullscreen-fallback');
+  fullscreenBtn.textContent='⛶';
+  fullscreenBtn.setAttribute('aria-label',isFS?'Salir de pantalla completa':'Entrar en pantalla completa');
+  fullscreenBtn.title=isFS?'Salir de pantalla completa':'Entrar en pantalla completa';
+}
+fullscreenBtn.addEventListener('click',toggleFullscreen);
+fullscreenBtn.addEventListener('touchend',e=>{e.preventDefault();toggleFullscreen();},{passive:false});
+document.addEventListener('fullscreenchange',updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange',updateFullscreenButton);
+updateFullscreenButton();
+updateOrientationOverlay();
+document.addEventListener('touchstart',e=>{const t=e.target.closest('.hotspot,#home,#fullscreen');if(t)t.classList.add('is-touching');},{passive:true});
+document.addEventListener('touchend',()=>document.querySelectorAll('.is-touching').forEach(e=>e.classList.remove('is-touching')),{passive:true});
+document.addEventListener('touchcancel',()=>document.querySelectorAll('.is-touching').forEach(e=>e.classList.remove('is-touching')),{passive:true});
+currentSlide=readSlide();draw();
+
+// Rendimiento: el Service Worker se registra sin bloquear la carga inicial.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', {scope:'./'}).catch(()=>{});
+  });
+}
+// Seguridad: nunca dejar la pantalla de carga bloqueada por una imagen/caché fallida.
+setTimeout(() => { loading.style.display = 'none'; }, 5000);
+</script>
+</body>
+</html>
