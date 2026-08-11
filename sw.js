@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mrwok-v5.8-slider12';
+const CACHE_NAME = 'mrwok-v5.8-slider11-14';
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', event => {
